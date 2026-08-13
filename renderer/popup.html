@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body {
+    margin: 0; padding: 0; background: transparent; overflow: hidden;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #card {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(28, 28, 32, 0.92);
+    color: #fff;
+    border-radius: 12px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+    -webkit-app-region: no-drag;
+  }
+  #dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #6b6b73;
+    flex-shrink: 0;
+  }
+  #dot.listening { background: #2ecc71; animation: pulse 1s ease-in-out infinite; }
+  #dot.processing { background: #3478f6; animation: spin 0.9s linear infinite; }
+  #dot.paused { background: #5a5a5f; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.35); opacity: 0.7; }
+  }
+  @keyframes spin {
+    0% { box-shadow: 0 -6px 0 -3px #fff; }
+    25% { box-shadow: 6px 0 0 -3px #fff; }
+    50% { box-shadow: 0 6px 0 -3px #fff; }
+    75% { box-shadow: -6px 0 0 -3px #fff; }
+    100% { box-shadow: 0 -6px 0 -3px #fff; }
+  }
+  #text { font-size: 13px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #caption { font-size: 11px; color: #b7b7bd; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div id="card">
+  <div id="dot"></div>
+  <div>
+    <div id="text">Idle</div>
+    <div id="caption"></div>
+  </div>
+</div>
+<script src="./popup-renderer.js"></script>
+</body>
+</html>

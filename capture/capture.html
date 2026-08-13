@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>beckon capture (hidden)</title></head>
+<body>
+<script>
+// This window is never shown (see main.js: show: false). It exists purely
+// to get cross-platform mic access via getUserMedia — the one thing Electron's
+// renderer (Chromium) gives us for free on both Windows and Linux, no native
+// audio deps needed.
+
+const TARGET_SAMPLE_RATE = 16000;
+
+// Simple energy-based voice activity detection. Tune these two if wake
+// detection feels too twitchy or too sluggish for your mic/room.
+const SPEECH_RMS_THRESHOLD = 0.015;
+const SILENCE_FRAMES_TO_END_UTTERANCE = 12; // ~12 * (bufferSize/sampleRate) seconds of quiet
+
+let silenceStreak = 0;
+let speaking = false;
+
+function floatTo16BitPCM(float32Array) {
+  const buffer = new ArrayBuffer(float32Array.length * 2);
+  const view = new DataView(buffer);
+  let offset = 0;
+  for (let i = 0; i < float32Array.length; i++, offset += 2) {
+    let s = Math.max(-1, Math.min(1, float32Array[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buffer;
+}
+
+function rms(float32Array) {
+  let sum = 0;
+  for (let i = 0; i < float32Array.length; i++) sum += float32Array[i] * float32Array[i];
+  return Math.sqrt(sum / float32Array.length);
+}
+
+async function start() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioCtx = new AudioContext(); // runs at the device's native rate; we resample below
+    const source = audioCtx.createMediaStreamSource(stream);
+
+    // ScriptProcessorNode is deprecated in favor of AudioWorkletNode — kept
+    // here for simplicity since this is a single-file scaffold. Swap to an
+    // AudioWorklet if you want to modernize this later.
+    const bufferSize = 4096;
+    const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+    const nativeRate = audioCtx.sampleRate;
+    const resampleRatio = TARGET_SAMPLE_RATE / nativeRate;
+
+    processor.onaudioprocess = (event) => {
+      const input = event.inputBuffer.getChannelData(0);
+
+      // Naive linear resample down to 16kHz (good enough for wake-word/STT use).
+      const outLength = Math.floor(input.length * resampleRatio);
+      const resampled = new Float32Array(outLength);
+      for (let i = 0; i < outLength; i++) {
+        resampled[i] = input[Math.floor(i / resampleRatio)];
+      }
+
+      const level = rms(resampled);
+      if (level > SPEECH_RMS_THRESHOLD) {
+        speaking = true;
+        silenceStreak = 0;
+      } else if (speaking) {
+        silenceStreak++;
+        if (silenceStreak > SILENCE_FRAMES_TO_END_UTTERANCE) {
+          speaking = false;
+          silenceStreak = 0;
+          window.captureAPI.sendUtteranceEnd();
+        }
+      }
+
+      // Always stream chunks (Vosk wants continuous audio regardless of our
+      // own VAD; Whisper's provider just buffers until utterance-end fires).
+      window.captureAPI.sendChunk(floatTo16BitPCM(resampled));
+    };
+
+    source.connect(processor);
+    processor.connect(audioCtx.destination);
+  } catch (err) {
+    window.captureAPI.reportError(err.message || String(err));
+  }
+}
+
+start();
+</script>
+</body>
+</html>

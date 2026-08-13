@@ -1,0 +1,8 @@
+node_modules/
+package-lock.json
+*.log
+.DS_Store
+dist/
+build/
+*.assistant-tray-backup-*.json
+*.beckon-backup-*.json
