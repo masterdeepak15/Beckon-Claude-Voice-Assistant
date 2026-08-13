@@ -1,8 +1,19 @@
 {
   "name": "@masterdeepak15/beckon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Beckon — hands-free voice front-end for Claude Code. Say your assistant's name (chosen by you at onboarding), watch it wake up in the system tray, get work done. Whisper/Vosk/native STT, realtime status via streamed output + Claude Code hooks, native notifications.",
   "main": "main.js",
+  "files": [
+    "bin",
+    "main.js",
+    "daemon",
+    "capture",
+    "renderer",
+    "assets",
+    "CLI.md",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
     "beckon": "./bin/beckon.js"
   },

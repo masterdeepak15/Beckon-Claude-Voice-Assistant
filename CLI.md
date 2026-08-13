@@ -68,7 +68,7 @@ You only need to install the package for the engine you're actually going to use
 
 ---
 
-## 4. First Run
+## 4. First Run — Fully Automated
 
 ```bash
 beckon start
@@ -79,13 +79,19 @@ or just:
 beckon
 ```
 
-This launches the tray app in the foreground (useful the first time, so you can see any errors). A small icon appears in your system tray/notification area.
+**This does everything for you, in order:**
 
-**Before this works, `~/.assistant/` must already exist** — that's created by the Claude Code `assistant` skill's onboarding, not by Beckon. If you see an error about `~/.assistant/` missing, open Claude Code, have any normal conversation, and let onboarding run first.
+1. Checks if the Claude Code CLI is installed (`claude --version`). If not, runs the official native installer for your OS automatically (`https://claude.ai/install.ps1` on Windows, `https://claude.ai/install.sh` on Linux). If that just ran for the first time, it'll ask you to open a new terminal (so `claude` is on your PATH) and run `beckon start` again — that's a one-time thing.
+2. Checks if the **`assistant`** Claude Code skill is installed. If not, adds the Spyder marketplace and installs it automatically (`claude plugin marketplace add masterdeepak15/Spyder` + `claude plugin install assistant@spyder`) — safe to run repeatedly, won't duplicate or error if already present.
+3. Checks if onboarding has actually happened (i.e. you've named your assistant). **This one step can't be automated** — naming your assistant is a real conversation, not something a script can fill in for you. If it hasn't happened yet, Beckon tells you to open a terminal, run `claude`, and just say hi; onboarding kicks in on its own.
+4. Once all three are green, launches the tray app.
 
-On first launch, Beckon also writes a default config to `~/.assistant/beckon.config.json` (see §6).
+Run the checks on their own anytime, without launching the app, with:
+```bash
+beckon setup
+```
 
-**Test it:** say your assistant's name (whatever you picked during onboarding, e.g. "Maya"), followed by a request — "Maya, what's today's date." You should see the tray icon animate (pulsing green = listening for your command, spinning blue = working), then a notification with the response.
+**Test it:** once running, say your assistant's name followed by a request — "Maya, what's today's date." You should see the tray icon animate (pulsing green = listening for your command, spinning blue = working), then a notification with the response.
 
 ---
 
@@ -93,7 +99,8 @@ On first launch, Beckon also writes a default config to `~/.assistant/beckon.con
 
 | Command | What it does |
 |---|---|
-| `beckon` / `beckon start` | Launch the tray app in the foreground |
+| `beckon` / `beckon start` | Checks readiness (Claude Code installed, `assistant` skill installed, onboarding done), auto-fixes what it can, then launches the tray app |
+| `beckon setup` | Runs just the readiness check/auto-fix above, without launching the app afterward |
 | `beckon install-service` | Register Beckon to auto-start on login (Task Scheduler on Windows, `systemd --user` on Linux) |
 | `beckon uninstall-service` | Remove that auto-start registration |
 | `beckon service-status` | Check whether auto-start is currently registered/running |

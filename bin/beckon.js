@@ -12,15 +12,19 @@ function printHelp() {
 Beckon — hands-free voice front-end for Claude Code
 
 Usage:
-  beckon                    Launch the tray app (same as 'beckon start')
-  beckon start               Launch the tray app in the foreground
-  beckon install-service     Start Beckon automatically on login
-  beckon uninstall-service   Remove the auto-start entry
-  beckon service-status      Check if auto-start is registered
-  beckon install-hooks       Wire up realtime Claude Code hooks (see CLI.md)
-  beckon uninstall-hooks     Remove those hooks (leaves your other hooks alone)
-  beckon generate-icons      Regenerate tray icon assets
-  beckon --help              Show this message
+  beckon                     Check readiness, then launch the tray app
+  beckon start                Same as above — checks Claude Code + the
+                               'assistant' skill are ready first, auto-fixes
+                               what it can, then launches
+  beckon setup                 Run just the readiness check/auto-fix, without
+                               launching the tray app afterward
+  beckon install-service      Start Beckon automatically on login
+  beckon uninstall-service    Remove the auto-start entry
+  beckon service-status       Check if auto-start is registered
+  beckon install-hooks        Wire up realtime Claude Code hooks (see CLI.md)
+  beckon uninstall-hooks      Remove those hooks (leaves your other hooks alone)
+  beckon generate-icons       Regenerate tray icon assets
+  beckon --help                Show this message
 
 Full documentation: CLI.md in the package root, or the GitHub repo.
 `);
@@ -44,46 +48,66 @@ function launchTrayApp() {
   child.on('exit', (code) => process.exit(code === null ? 0 : code));
 }
 
-switch (command) {
-  case 'start':
-    launchTrayApp();
-    break;
-
-  case 'install-service': {
-    const mod = process.platform === 'win32' ? './service/windows' : './service/linux';
-    require(path.join(PACKAGE_ROOT, 'daemon', mod.slice(2))).install();
-    break;
-  }
-  case 'uninstall-service': {
-    const mod = process.platform === 'win32' ? './service/windows' : './service/linux';
-    require(path.join(PACKAGE_ROOT, 'daemon', mod.slice(2))).uninstall();
-    break;
-  }
-  case 'service-status': {
-    const mod = process.platform === 'win32' ? './service/windows' : './service/linux';
-    require(path.join(PACKAGE_ROOT, 'daemon', mod.slice(2))).status();
-    break;
-  }
-
-  case 'install-hooks':
-    require(path.join(PACKAGE_ROOT, 'daemon', 'install-hooks')).installHooks();
-    break;
-  case 'uninstall-hooks':
-    require(path.join(PACKAGE_ROOT, 'daemon', 'install-hooks')).uninstallHooks();
-    break;
-
-  case 'generate-icons':
-    require(path.join(PACKAGE_ROOT, 'assets', 'generate-icons'));
-    break;
-
-  case '--help':
-  case '-h':
-  case 'help':
-    printHelp();
-    break;
-
-  default:
-    console.error(`Unknown command: ${command}\n`);
-    printHelp();
+async function startWithSetupCheck() {
+  const { runSetup } = require(path.join(PACKAGE_ROOT, 'daemon', 'setup'));
+  const result = await runSetup({ verbose: true });
+  if (!result.ready) {
+    console.log("\nNot launching yet — fix the above, then run 'beckon start' again.");
     process.exit(1);
+  }
+  launchTrayApp();
 }
+
+function requireServiceModule() {
+  const mod = process.platform === 'win32' ? 'windows' : 'linux';
+  return require(path.join(PACKAGE_ROOT, 'daemon', 'service', mod));
+}
+
+async function main() {
+  switch (command) {
+    case 'start':
+      await startWithSetupCheck();
+      break;
+
+    case 'setup': {
+      const { runSetup } = require(path.join(PACKAGE_ROOT, 'daemon', 'setup'));
+      const result = await runSetup({ verbose: true });
+      process.exit(result.ready ? 0 : 1);
+      break;
+    }
+
+    case 'install-service':
+      requireServiceModule().install();
+      break;
+    case 'uninstall-service':
+      requireServiceModule().uninstall();
+      break;
+    case 'service-status':
+      requireServiceModule().status();
+      break;
+
+    case 'install-hooks':
+      require(path.join(PACKAGE_ROOT, 'daemon', 'install-hooks')).installHooks();
+      break;
+    case 'uninstall-hooks':
+      require(path.join(PACKAGE_ROOT, 'daemon', 'install-hooks')).uninstallHooks();
+      break;
+
+    case 'generate-icons':
+      require(path.join(PACKAGE_ROOT, 'assets', 'generate-icons'));
+      break;
+
+    case '--help':
+    case '-h':
+    case 'help':
+      printHelp();
+      break;
+
+    default:
+      console.error(`Unknown command: ${command}\n`);
+      printHelp();
+      process.exit(1);
+  }
+}
+
+main();
