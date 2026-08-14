@@ -115,7 +115,7 @@ beckon install-hooks      # optional — see §7 for what this gives you
 
 ## 6. Configuration — `~/.assistant/beckon.config.json`
 
-Created automatically on first run. Edit it directly, or change most of it from the tray menu.
+Created automatically on first run — with `voskModelPath` already pointing at the model `npm install` downloaded, no manual filling-in needed. Edit the file directly, or change most of it from the tray menu.
 
 ```json
 {
@@ -124,7 +124,7 @@ Created automatically on first run. Edit it directly, or change most of it from 
   "workingDirectory": "/home/you",
   "sttProvider": "vosk",
   "whisperModel": "Xenova/whisper-tiny.en",
-  "voskModelPath": "",
+  "voskModelPath": "/usr/lib/node_modules/@masterdeepak15/beckon/models/vosk-model-small-en-us-0.15",
   "ttsEnabled": false,
   "ttsVoice": "",
   "claudeBin": "claude",
@@ -132,6 +132,7 @@ Created automatically on first run. Edit it directly, or change most of it from 
   "hooksInstalled": false
 }
 ```
+*(`voskModelPath` above shows a typical global-install location — yours will match wherever npm installed the package. Leave it blank and Beckon keeps auto-detecting the bundled model; set it yourself to point at a different/bigger model instead.)*
 
 | Key | What it controls |
 |---|---|
@@ -140,12 +141,23 @@ Created automatically on first run. Edit it directly, or change most of it from 
 | `workingDirectory` | Where Claude Code runs for voice-triggered commands. Point it at a specific project if you mostly want voice control there |
 | `sttProvider` | `"sapi"` \| `"vosk"` \| `"whisper"` — see §3 |
 | `whisperModel` | Which Whisper model size to use (only relevant if `sttProvider` is `"whisper"`) |
-| `voskModelPath` | Path to your downloaded Vosk model folder (only relevant if `sttProvider` is `"vosk"`) |
+| `voskModelPath` | Auto-filled by `npm install`. Only set this yourself if you want a different/bigger Vosk model than the auto-downloaded small one |
 | `ttsEnabled` | Speak responses back out loud (OS-native TTS, no cloud) |
 | `ttsVoice` | Specific voice name, if you have more than one installed. Empty = system default |
 | `claudeBin` | Override if `claude` isn't on PATH or you want a specific binary |
 | `hookServerPort` | Local port for the hooks integration (§7) — change if 8765 is taken |
 | `hooksInstalled` | Informational flag, set automatically by `install-hooks`/`uninstall-hooks` |
+
+### Advanced: Environment Variable Overrides
+
+Mainly useful for testing or pinning a specific source — most people never need these:
+
+| Variable | Effect |
+|---|---|
+| `VOSK_MODEL_PATH` | Overrides the auto-detected Vosk model path, same as setting `voskModelPath` in config but via environment instead |
+| `BECKON_VOSK_MODEL_URL` | Overrides where `npm install`/`beckon setup` downloads the Vosk model from (default: the official small English model from alphacephei.com) |
+| `BECKON_FORCE_POSTINSTALL=1` | Forces the install-time automation to run even for a non-global/CI install |
+| `BECKON_SKIP_POSTINSTALL=1` | Skips it entirely, even for a global install |
 
 ---
 
@@ -181,7 +193,7 @@ Your assistant's memory (`~/.assistant/`) is untouched by any of this — that b
 
 | Symptom | Likely cause / fix |
 |---|---|
-| `~/.assistant/ doesn't exist yet` on startup | Run the `assistant` Claude Code skill's onboarding first (any normal Claude Code conversation triggers it) |
+| `~/.assistant/ doesn't exist yet` on startup | Should be rare now — `beckon start`/`beckon setup` check for this upfront and tell you to run `claude` and say hi. Seeing the raw error instead usually means something called into Beckon's internals directly rather than through the CLI |
 | Wake word never triggers | On Linux, confirm the Vosk model actually downloaded (`ls` the `models/` folder inside the installed package, or check the `npm install` output for download errors — offline installs skip this step); try `beckon start` in the foreground to see console errors |
 | Tray icon doesn't appear (Linux) | Some desktop environments (notably plain GNOME) need a tray/AppIndicator extension installed — this is a DE limitation, not a Beckon bug |
 | "Voice engine isn't ready" dialog | Rare now that the packages install automatically — usually means the Vosk model download failed during `npm install` (no internet at install time?). Run `beckon setup`, or switch engines from the tray menu |
