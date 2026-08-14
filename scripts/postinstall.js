@@ -61,9 +61,26 @@ async function main() {
 
   const { ensureVoskModel } = require(path.join(PACKAGE_ROOT, 'daemon', 'model-installer'));
   const modelResult = await ensureVoskModel({ log, warn });
+
   if (!modelResult.ok) {
-    warn(`No problem — Windows users don't need this (uses built-in speech recognition).`);
-    warn(`Linux users: run 'beckon setup' later to retry, or see CLI.md §3 for manual setup.`);
+    if (modelResult.skippedDownload) {
+      // vosk itself didn't build — most likely its ffi-napi dependency,
+      // a known-fragile native compile especially on Windows/newer Node.
+      if (process.platform === 'win32') {
+        log('Vosk (an optional speech engine) didn\'t install — no problem, you\'re on');
+        log('Windows, where the default engine (built-in Windows Speech Recognition)');
+        log('needs zero extra packages and already works out of the box.');
+      } else {
+        warn('Vosk (the default Linux speech engine) didn\'t install — this is a known');
+        warn('issue with one of its dependencies (ffi-napi) on some Node/OS combinations.');
+        warn('Easiest fix: switch to Whisper instead — it\'s already installed and needs');
+        warn('no native compilation. Run `beckon setup`, or pick "Whisper" from the tray\'s');
+        warn('Voice Engine menu once Beckon is running.');
+      }
+    } else {
+      warn(`No problem — Windows users don't need this (uses built-in speech recognition).`);
+      warn(`Linux users: run 'beckon setup' later to retry, or see CLI.md §3 for manual setup.`);
+    }
   }
 
   ensureAssistantSkillIfClaudePresent();

@@ -133,7 +133,17 @@ async function runSetup({ verbose = true } = {}) {
   const currentConfig = config.loadConfig();
   if (currentConfig.sttProvider === 'vosk') {
     const fs = require('fs');
-    if (fs.existsSync(config.BUNDLED_VOSK_MODEL_PATH) || currentConfig.voskModelPath) {
+
+    if (!config.isVoskAvailable()) {
+      // vosk itself never built — most likely its ffi-napi dependency, a
+      // known-fragile native compile especially on Windows/newer Node.
+      // No point retrying a model download for an engine that can't load.
+      const msg = `⚠️  Vosk (your configured speech engine) isn't actually installed — ` +
+        `its native dependency didn't build. Switch to "whisper" from the tray's Voice ` +
+        `Engine menu (needs no native compilation), or "sapi" if you're on Windows.`;
+      log(msg);
+      messages.push(msg);
+    } else if (fs.existsSync(config.BUNDLED_VOSK_MODEL_PATH) || currentConfig.voskModelPath) {
       log('✅ Vosk speech model is ready.');
     } else {
       log('Speech model missing — retrying download...');

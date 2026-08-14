@@ -55,6 +55,14 @@ function extractZip(zipPath, destDir) {
  * cleanly if already present. Returns { ok, reason? }, never throws.
  */
 async function ensureVoskModel({ log = () => {}, warn = console.warn } = {}) {
+  if (!config.isVoskAvailable()) {
+    // No point downloading a 40MB model for an engine that can't load.
+    // This is expected and fine — not every platform can build ffi-napi's
+    // native bindings, and "sapi" (Windows) / "whisper" (any platform)
+    // don't need this at all.
+    return { ok: false, reason: 'vosk-not-installed', skippedDownload: true };
+  }
+
   if (fs.existsSync(config.BUNDLED_VOSK_MODEL_PATH)) {
     log('Vosk model already present, skipping download.');
     return { ok: true };

@@ -50,15 +50,17 @@ npm link             # makes the local `beckon` command available globally
 
 ## 3. Voice Engines (Switch Anytime, No Reinstall Needed)
 
-All three engines' packages install with Beckon itself now — switching between them from the tray's **Voice Engine** menu (or `sttProvider` in the config) never requires a separate `npm install` step.
+`sapi` and `whisper` install with Beckon itself, guaranteed — `npm install` fails loudly if either can't install, rather than silently leaving you without them. `vosk` is different: it's **best-effort**, because its native dependency (`ffi-napi`) is a known-fragile compile step, especially on Windows with newer Node versions. If it can't build, `npm install` still succeeds — Beckon just picks a working default automatically instead (`sapi` on Windows, `whisper` on Linux).
 
-| Engine | Model setup | Best for |
-|---|---|---|
-| `sapi` | None — built into Windows | Windows users, zero setup |
-| `vosk` | Auto-downloaded on `npm install` (Linux default) | Lightweight, fully offline |
-| `whisper` | Model (~40MB `tiny.en` by default) downloads automatically the first time you actually use it, then caches offline | Best accuracy, any platform, heavier on CPU |
+| Engine | Model setup | Best for | Reliability |
+|---|---|---|---|
+| `sapi` | None — built into Windows | Windows users, zero setup | Always works — it's a Windows OS feature, no npm package involved |
+| `whisper` | Model (~40MB `tiny.en` by default) downloads automatically the first time you actually use it, then caches offline | Best accuracy, any platform, heavier on CPU | Always works — no native compilation, just prebuilt ONNX runtime binaries |
+| `vosk` | Auto-downloaded on `npm install`, **only if the `vosk` package itself built successfully** | Lightweight, fully offline, Linux default when available | **Best-effort.** Its `ffi-napi` dependency can fail to compile — known issue on some Windows/Node combos. `beckon setup` tells you plainly if this happened on your machine, and you lose nothing: switch to `sapi`/`whisper` from the tray's Voice Engine menu |
 
-Want a bigger/more accurate Vosk model than the small default? Download one from https://alphacephei.com/vosk/models and point `voskModelPath` in the config (§6) at it — your override always wins over the auto-downloaded one.
+**If `vosk` failed to install for you:** that's expected on some setups, not a broken install — everything else (the `beckon` CLI, Claude Code, the `assistant` skill) still installed fine, and Beckon already picked `whisper` or `sapi` as your default automatically. No action needed unless you specifically want Vosk's lighter resource footprint over Whisper's better accuracy.
+
+Want a bigger/more accurate Vosk model than the small default (assuming `vosk` itself installed fine for you)? Download one from https://alphacephei.com/vosk/models and point `voskModelPath` in the config (§6) at it — your override always wins over the auto-downloaded one.
 
 ---
 
@@ -196,7 +198,8 @@ Your assistant's memory (`~/.assistant/`) is untouched by any of this — that b
 | `~/.assistant/ doesn't exist yet` on startup | Should be rare now — `beckon start`/`beckon setup` check for this upfront and tell you to run `claude` and say hi. Seeing the raw error instead usually means something called into Beckon's internals directly rather than through the CLI |
 | Wake word never triggers | On Linux, confirm the Vosk model actually downloaded (`ls` the `models/` folder inside the installed package, or check the `npm install` output for download errors — offline installs skip this step); try `beckon start` in the foreground to see console errors |
 | Tray icon doesn't appear (Linux) | Some desktop environments (notably plain GNOME) need a tray/AppIndicator extension installed — this is a DE limitation, not a Beckon bug |
-| "Voice engine isn't ready" dialog | Rare now that the packages install automatically — usually means the Vosk model download failed during `npm install` (no internet at install time?). Run `beckon setup`, or switch engines from the tray menu |
+| `npm install` fails with `ffi-napi` / `node-gyp` / MSBuild errors | This is `vosk`'s native dependency failing to compile — a known issue on some Windows/Node combos, not a Beckon bug. As of v0.3.1 this can't take down the whole install anymore (`vosk` is best-effort) — if you still see this, update to the latest version. Beckon works fine without it via `sapi`/`whisper` |
+| "Voice engine isn't ready" dialog, or `beckon setup` says Vosk "isn't actually installed" | Its native dependency didn't build (see above) — not a bug, just means that engine isn't available on your machine. Switch to `sapi` (Windows) or `whisper` (any platform) from the tray's Voice Engine menu — both need zero native compilation |
 | Claude Code exits with a nonzero code / bridge errors | Confirm `claude --help` still supports `-p`, `-c`, `--output-format stream-json` — flags can change between Claude Code releases; adjust `claudeBin`/check `daemon/claude-bridge.js` if they have |
 | Hooks don't seem to fire | Restart your Claude Code session after `install-hooks`; confirm nothing else is using port 8765 (`hookServerPort` in config) |
 | False wake-word triggers from background noise/TV | Trim `extraWakePhrases` down to just your assistant's actual name in the config |

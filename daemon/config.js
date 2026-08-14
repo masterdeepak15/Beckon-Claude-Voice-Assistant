@@ -22,6 +22,20 @@ function resolveDefaultVoskModelPath() {
   return ''; // postinstall couldn't fetch it (offline, etc.) — vosk.js gives a clear error if this stays empty
 }
 
+// `vosk` is an optionalDependency — its ffi-napi dependency is a known-fragile
+// native compile, especially on Windows with newer Node versions, so it can
+// legitimately fail to install even when everything else succeeds. Checking
+// locally here (rather than importing daemon/model-installer.js) avoids a
+// circular require, since model-installer.js itself requires this file.
+function isVoskAvailable() {
+  try { require('vosk'); return true; } catch (e) { return false; }
+}
+
+function resolveDefaultSttProvider() {
+  if (process.platform === 'win32') return 'sapi'; // built into the OS, always available
+  return isVoskAvailable() ? 'vosk' : 'whisper'; // don't default to an engine that can't load
+}
+
 const DEFAULT_CONFIG = {
   // How long (ms) to keep buffering audio for a command after the wake word,
   // before giving up and returning to idle WITHOUT calling Claude.
@@ -32,7 +46,7 @@ const DEFAULT_CONFIG = {
   // Working directory Claude Code runs in for voice-triggered sessions.
   workingDirectory: HOME,
   // "whisper" | "vosk" | "sapi" (sapi = Windows built-in, no setup, no model download)
-  sttProvider: process.platform === 'win32' ? 'sapi' : 'vosk',
+  sttProvider: resolveDefaultSttProvider(),
   // Whisper model size, only used when sttProvider is "whisper".
   // Options (accuracy vs speed/RAM): tiny.en, base.en, small.en, tiny, base, small (multilingual)
   whisperModel: 'Xenova/whisper-tiny.en',
@@ -110,6 +124,7 @@ module.exports = {
   BUNDLED_VOSK_MODEL_NAME,
   BUNDLED_VOSK_MODEL_PATH,
   DEFAULT_CONFIG,
+  isVoskAvailable,
   readAssistantName,
   loadConfig,
   saveConfig,
