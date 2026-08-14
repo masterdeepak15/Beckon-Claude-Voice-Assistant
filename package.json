@@ -1,7 +1,7 @@
 {
   "name": "@masterdeepak15/beckon",
-  "version": "0.2.0",
-  "description": "Beckon — hands-free voice front-end for Claude Code. Say your assistant's name (chosen by you at onboarding), watch it wake up in the system tray, get work done. Whisper/Vosk/native STT, realtime status via streamed output + Claude Code hooks, native notifications.",
+  "version": "0.3.0",
+  "description": "Beckon — hands-free voice front-end for Claude Code. Say your assistant's name (chosen by you at onboarding), watch it wake up in the system tray, get work done. Install and go — Whisper/Vosk/native STT, the Vosk model, Claude Code, and the assistant skill are all set up automatically.",
   "main": "main.js",
   "files": [
     "bin",
@@ -10,6 +10,7 @@
     "capture",
     "renderer",
     "assets",
+    "scripts",
     "CLI.md",
     "README.md",
     "LICENSE"
@@ -19,7 +20,8 @@
   },
   "scripts": {
     "start": "electron .",
-    "generate-icons": "node assets/generate-icons.js"
+    "generate-icons": "node assets/generate-icons.js",
+    "postinstall": "node scripts/postinstall.js"
   },
   "engines": {
     "node": ">=18"
@@ -27,9 +29,7 @@
   "os": ["win32", "linux"],
   "dependencies": {
     "chalk": "^4.1.2",
-    "pngjs": "^7.0.0"
-  },
-  "optionalDependencies": {
+    "pngjs": "^7.0.0",
     "electron": "^31.0.0",
     "@xenova/transformers": "^2.17.2",
     "vosk": "^0.3.39"

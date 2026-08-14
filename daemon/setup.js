@@ -126,6 +126,31 @@ async function runSetup({ verbose = true } = {}) {
   }
   log('✅ The "assistant" skill is installed.');
 
+  // 2.5. Speech model for the configured engine — retries the download here
+  // if it failed or was skipped during `npm install` (e.g. no internet at
+  // install time). Only relevant for "vosk"; "sapi" needs nothing and
+  // "whisper" downloads its model lazily on first real use.
+  const currentConfig = config.loadConfig();
+  if (currentConfig.sttProvider === 'vosk') {
+    const fs = require('fs');
+    if (fs.existsSync(config.BUNDLED_VOSK_MODEL_PATH) || currentConfig.voskModelPath) {
+      log('✅ Vosk speech model is ready.');
+    } else {
+      log('Speech model missing — retrying download...');
+      const { ensureVoskModel } = require('./model-installer');
+      const modelResult = await ensureVoskModel({ log, warn: log });
+      if (modelResult.ok) {
+        log('✅ Vosk speech model is ready.');
+      } else {
+        const msg = `⚠️  Couldn't download the Vosk speech model (${modelResult.reason}). ` +
+          `Switch to "sapi" (Windows) from the tray menu, or download a model manually — see CLI.md §3.`;
+        log(msg);
+        messages.push(msg);
+        // Not a hard blocker — sapi/whisper are still switchable from the tray, so don't return early.
+      }
+    }
+  }
+
   // 3. Onboarding — this genuinely can't be automated, it's a real
   // conversation where the user names their assistant. Just detect it.
   if (isOnboarded()) {

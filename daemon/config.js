@@ -9,6 +9,19 @@ const IDENTITY_FILE = path.join(MEMORY_ROOT, 'IDENTITY.md');
 const BECKON_CONFIG_FILE = path.join(MEMORY_ROOT, 'beckon.config.json');
 const CLAUDE_SETTINGS_FILE = path.join(HOME, '.claude', 'settings.json');
 
+// Where `scripts/postinstall.js` downloads the Vosk model to, package-local
+// so it works before ~/.assistant/ even exists (no onboarding-order
+// dependency) and needs zero manual configuration from the user.
+const BUNDLED_MODELS_DIR = path.join(__dirname, '..', 'models');
+const BUNDLED_VOSK_MODEL_NAME = 'vosk-model-small-en-us-0.15';
+const BUNDLED_VOSK_MODEL_PATH = path.join(BUNDLED_MODELS_DIR, BUNDLED_VOSK_MODEL_NAME);
+
+function resolveDefaultVoskModelPath() {
+  if (process.env.VOSK_MODEL_PATH) return process.env.VOSK_MODEL_PATH;
+  if (fs.existsSync(BUNDLED_VOSK_MODEL_PATH)) return BUNDLED_VOSK_MODEL_PATH;
+  return ''; // postinstall couldn't fetch it (offline, etc.) — vosk.js gives a clear error if this stays empty
+}
+
 const DEFAULT_CONFIG = {
   // How long (ms) to keep buffering audio for a command after the wake word,
   // before giving up and returning to idle WITHOUT calling Claude.
@@ -23,8 +36,6 @@ const DEFAULT_CONFIG = {
   // Whisper model size, only used when sttProvider is "whisper".
   // Options (accuracy vs speed/RAM): tiny.en, base.en, small.en, tiny, base, small (multilingual)
   whisperModel: 'Xenova/whisper-tiny.en',
-  // Path to a Vosk model folder, only used when sttProvider is "vosk". Falls back to VOSK_MODEL_PATH env var.
-  voskModelPath: process.env.VOSK_MODEL_PATH || '',
   // Speak responses back using OS-native TTS. Off by default.
   ttsEnabled: false,
   // TTS voice name, if the OS has more than one installed. Empty = system default.
@@ -53,7 +64,12 @@ function loadConfig() {
       console.error(`[config] Failed to parse ${BECKON_CONFIG_FILE}: ${e.message}`);
     }
   }
-  return { ...DEFAULT_CONFIG, ...userConfig };
+  // voskModelPath is resolved fresh here (not baked into DEFAULT_CONFIG) so a
+  // model downloaded mid-process (e.g. by `beckon setup` retrying it) is
+  // picked up immediately without needing a fresh require() of this module.
+  // Order matters: fresh default first, then userConfig overrides it if the
+  // user explicitly set their own path (e.g. a bigger, more accurate model).
+  return { voskModelPath: resolveDefaultVoskModelPath(), ...DEFAULT_CONFIG, ...userConfig };
 }
 
 function saveConfig(partial) {
@@ -90,6 +106,9 @@ module.exports = {
   IDENTITY_FILE,
   BECKON_CONFIG_FILE,
   CLAUDE_SETTINGS_FILE,
+  BUNDLED_MODELS_DIR,
+  BUNDLED_VOSK_MODEL_NAME,
+  BUNDLED_VOSK_MODEL_PATH,
   DEFAULT_CONFIG,
   readAssistantName,
   loadConfig,

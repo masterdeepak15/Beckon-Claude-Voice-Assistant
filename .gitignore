@@ -4,5 +4,6 @@ package-lock.json
 .DS_Store
 dist/
 build/
+models/
 *.assistant-tray-backup-*.json
 *.beckon-backup-*.json

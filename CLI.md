@@ -6,30 +6,21 @@ Everything needed to install, run, and manage Beckon from the command line. For 
 
 ## 1. What Beckon Needs Before You Start
 
-| Requirement | Why |
+Short version: **just Node.js 18+ and a microphone.** Everything else — Claude Code, the `assistant` skill, the speech engine and its model — installs itself. Details below are for reference/troubleshooting, not steps you need to do by hand.
+
+| Requirement | Handled how |
 |---|---|
-| Node.js 18+ | Runs the CLI and the tray app |
-| [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) on PATH (`claude`) | Beckon invokes it for every command |
-| The **`assistant`** Claude Code skill, onboarding completed | Beckon reads your assistant's chosen name from `~/.assistant/IDENTITY.md` — it won't know what to listen for otherwise |
-| A microphone | For obvious reasons |
+| Node.js 18+ | You install this yourself — the one real prerequisite |
+| [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) | Auto-installed by `npm install` (if `claude` is already on PATH) or by `beckon start` (if not) |
+| The **`assistant`** Claude Code skill | Auto-installed the same way |
+| Speech engine + model (Vosk on Linux) | Auto-downloaded during `npm install` |
+| Onboarding (naming your assistant) | **Can't be automated** — see §4, it's one short conversation |
+| A microphone | Yours to provide |
 | Windows 10+ or Linux with a desktop environment | macOS isn't supported (not tested, no code path for it) |
 
-**Platform-specific extras:**
+**Windows:** the default voice engine (SAPI) is built into the OS — nothing to install at all for the default setup. Just confirm a default mic is set (Settings → Sound) with permission for Windows Speech Recognition.
 
-### Windows
-Nothing to install — Beckon's default voice engine uses the Windows Speech Recognition engine (SAPI), built into the OS. Just make sure a default microphone is set (Settings → Sound) and Windows Speech Recognition has mic permission.
-
-### Linux
-Beckon's default voice engine on Linux is Vosk (free, offline, lightweight):
-```bash
-sudo apt install alsa-utils     # provides arecord, used for mic capture fallback
-npm install vosk                 # optional dependency — see step 3 below
-```
-Then download a small model (~50MB) from https://alphacephei.com/vosk/models — e.g. `vosk-model-small-en-us-0.15` — unzip it anywhere, and either:
-```bash
-export VOSK_MODEL_PATH=/path/to/vosk-model-small-en-us-0.15
-```
-or set `voskModelPath` in your config file (step 4). Add the `export` line to `.bashrc`/`.zshrc` so it's still set when Beckon runs as a background service.
+**Linux:** the default voice engine is Vosk, and `npm install` downloads its model automatically (~40MB, one-time). The only thing worth installing yourself if it's missing: `sudo apt install alsa-utils` (provides `arecord`, used as a capture fallback on some setups).
 
 ---
 
@@ -39,32 +30,35 @@ or set `voskModelPath` in your config file (step 4). Add the `export` line to `.
 npm install -g @masterdeepak15/beckon
 ```
 
-This installs the `beckon` command globally. Electron (the GUI runtime) is an **optional dependency** — if it doesn't install automatically for your platform/architecture, install it explicitly:
-```bash
-npm install -g electron
-```
+That's it. This one command:
+- Installs the `beckon` CLI and the Electron tray runtime (a required dependency now — no separate step)
+- Downloads the Vosk speech model automatically, so `sttProvider: "vosk"` works immediately with zero manual config
+- If Claude Code is already on your PATH, installs the `assistant` skill for you too
+- If Claude Code *isn't* installed yet, that's fine — `beckon start` installs it the first time you run it (§4)
+
+Watch the output — it tells you exactly what it did and what (if anything) is still pending.
 
 ### Installing from source (if you cloned the repo instead)
 ```bash
 git clone https://github.com/masterdeepak15/Beckon-Claude-Voice-Assistant.git
 cd Beckon-Claude-Voice-Assistant
-npm install
-npm link          # makes the local `beckon` command available globally
+npm install         # same automatic setup runs here too
+npm link             # makes the local `beckon` command available globally
 ```
 
 ---
 
-## 3. Choosing Your Voice Engine
+## 3. Voice Engines (Switch Anytime, No Reinstall Needed)
 
-Beckon supports three, switchable anytime (config file, or the tray's right-click menu → **Voice Engine**):
+All three engines' packages install with Beckon itself now — switching between them from the tray's **Voice Engine** menu (or `sttProvider` in the config) never requires a separate `npm install` step.
 
-| Engine | Install step | Best for |
+| Engine | Model setup | Best for |
 |---|---|---|
-| `sapi` | none (Windows only, built-in) | Windows users who want zero setup |
-| `vosk` | `npm install vosk` + model download (§1) | Linux default — lightweight, fully offline |
-| `whisper` | `npm install @xenova/transformers` | Best accuracy, any platform. Model (~40MB, `tiny.en` by default) downloads automatically the first time you use it, then runs fully offline. Heavier on CPU than the other two. |
+| `sapi` | None — built into Windows | Windows users, zero setup |
+| `vosk` | Auto-downloaded on `npm install` (Linux default) | Lightweight, fully offline |
+| `whisper` | Model (~40MB `tiny.en` by default) downloads automatically the first time you actually use it, then caches offline | Best accuracy, any platform, heavier on CPU |
 
-You only need to install the package for the engine you're actually going to use — the others stay uninstalled with no penalty (they're `optionalDependencies`, Beckon just won't offer them until you install them).
+Want a bigger/more accurate Vosk model than the small default? Download one from https://alphacephei.com/vosk/models and point `voskModelPath` in the config (§6) at it — your override always wins over the auto-downloaded one.
 
 ---
 
@@ -188,9 +182,9 @@ Your assistant's memory (`~/.assistant/`) is untouched by any of this — that b
 | Symptom | Likely cause / fix |
 |---|---|
 | `~/.assistant/ doesn't exist yet` on startup | Run the `assistant` Claude Code skill's onboarding first (any normal Claude Code conversation triggers it) |
-| Wake word never triggers | Check `sttProvider` is actually installed (§3); on Linux confirm `VOSK_MODEL_PATH`/`voskModelPath` points at a real model folder; try `beckon start` in the foreground to see console errors |
+| Wake word never triggers | On Linux, confirm the Vosk model actually downloaded (`ls` the `models/` folder inside the installed package, or check the `npm install` output for download errors — offline installs skip this step); try `beckon start` in the foreground to see console errors |
 | Tray icon doesn't appear (Linux) | Some desktop environments (notably plain GNOME) need a tray/AppIndicator extension installed — this is a DE limitation, not a Beckon bug |
-| "Voice engine isn't ready" dialog | The package for your configured `sttProvider` isn't installed — install it (§3) or switch engines from the tray menu |
+| "Voice engine isn't ready" dialog | Rare now that the packages install automatically — usually means the Vosk model download failed during `npm install` (no internet at install time?). Run `beckon setup`, or switch engines from the tray menu |
 | Claude Code exits with a nonzero code / bridge errors | Confirm `claude --help` still supports `-p`, `-c`, `--output-format stream-json` — flags can change between Claude Code releases; adjust `claudeBin`/check `daemon/claude-bridge.js` if they have |
 | Hooks don't seem to fire | Restart your Claude Code session after `install-hooks`; confirm nothing else is using port 8765 (`hookServerPort` in config) |
 | False wake-word triggers from background noise/TV | Trim `extraWakePhrases` down to just your assistant's actual name in the config |
