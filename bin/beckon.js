@@ -37,9 +37,14 @@ function launchTrayApp() {
   try {
     electronPath = require('electron');
   } catch (e) {
+    // This is a fallback safety net — `beckon start` normally catches and
+    // repairs this via daemon/setup.js's electron check before ever
+    // reaching here. Seeing this directly usually means `beckon` was
+    // invoked in some other way that skipped the setup check.
     console.error(
-      "Electron isn't installed. Run: npm install electron --no-save\n" +
-      "(it's an optionalDependency so platforms without a GUI can skip it)"
+      "Electron (the GUI runtime — compulsory, not optional) isn't ready.\n" +
+      "Run 'beckon setup' to diagnose and attempt an automatic repair.\n" +
+      `Raw error: ${e.message}`
     );
     process.exit(1);
   }

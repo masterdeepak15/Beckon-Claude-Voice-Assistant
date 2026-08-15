@@ -10,7 +10,7 @@ function install() {
   try {
     electronPath = require('electron');
   } catch (e) {
-    console.error("Electron isn't installed — run 'npm install electron --no-save' first.");
+    console.error("Electron isn't ready. Run 'beckon setup' first — it'll diagnose and try to repair this automatically.");
     return;
   }
 

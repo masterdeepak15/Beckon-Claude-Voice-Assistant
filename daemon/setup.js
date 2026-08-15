@@ -24,6 +24,50 @@ function isClaudeInstalled() {
 }
 
 /**
+ * The `electron` npm package's own `require('electron')` returns a path
+ * string to the actual binary — but that binary is downloaded separately,
+ * by electron's own postinstall script, from GitHub. If that download
+ * failed (network/firewall/corporate proxy — very common cause) `npm
+ * install` can still report success while the binary itself never
+ * arrived, and `require('electron')` throws at runtime instead. GUI is
+ * compulsory for Beckon (no headless mode), so this has to be checked
+ * for real, not assumed from npm's exit code.
+ */
+function isElectronAvailable() {
+  try {
+    const electronPath = require('electron');
+    return typeof electronPath === 'string' && fs.existsSync(electronPath);
+  } catch (e) {
+    return false;
+  }
+}
+
+function locateElectronInstallScript() {
+  try {
+    const pkgJsonPath = require.resolve('electron/package.json');
+    const installScript = path.join(path.dirname(pkgJsonPath), 'install.js');
+    return fs.existsSync(installScript) ? installScript : null;
+  } catch (e) {
+    return null; // the 'electron' package itself isn't even present
+  }
+}
+
+/**
+ * Re-runs electron's own postinstall binary-download script directly —
+ * the standard fix for "electron installed but the binary didn't
+ * download". Returns { ok, reason? }.
+ */
+function attemptElectronRepair() {
+  const installScript = locateElectronInstallScript();
+  if (!installScript) {
+    return { ok: false, reason: "the 'electron' package itself isn't installed — try: npm install electron" };
+  }
+  const result = run(`node "${installScript}"`, { stdio: 'inherit' });
+  if (!result.ok) return { ok: false, reason: (result.output || '').trim().slice(0, 300) || 'download failed' };
+  return { ok: isElectronAvailable() };
+}
+
+/**
  * Runs Claude Code's official native installer for the current platform.
  * Commands per https://docs.claude.com (verified before writing this —
  * see CLI.md changelog note) — if Anthropic changes these, this step
@@ -92,6 +136,33 @@ async function runSetup({ verbose = true } = {}) {
   const messages = [];
 
   log('\n🔧 Beckon setup check\n');
+
+  // 0. Electron (the GUI runtime) — compulsory, not optional. Checked
+  // first: nothing else matters if the tray app itself can't launch.
+  if (isElectronAvailable()) {
+    log('✅ Electron (GUI runtime) is ready.');
+  } else {
+    log('⚠️  Electron isn\'t ready — attempting to repair (re-running its download)...');
+    const repair = attemptElectronRepair();
+    if (repair.ok) {
+      log('✅ Electron repaired and ready.');
+    } else {
+      const msg = `❌ Electron couldn't be installed/repaired automatically.\n` +
+        `   This is almost always a network/proxy/firewall issue — Electron downloads a\n` +
+        `   ~100-200MB binary from GitHub during install, and corporate networks often\n` +
+        `   block or intercept that. Try, in order:\n` +
+        `   1. Retry directly:  npm install electron --force\n` +
+        `   2. Behind a proxy:  set ELECTRON_GET_USE_PROXY=1   (PowerShell: $env:ELECTRON_GET_USE_PROXY="1")\n` +
+        `                       then retry step 1\n` +
+        `   3. GitHub blocked:  npm config set electron_mirror https://npmmirror.com/mirrors/electron/\n` +
+        `                       then retry step 1\n` +
+        `   Then run 'beckon setup' again.\n` +
+        `   Details: ${repair.reason}`;
+      log(msg);
+      messages.push(msg);
+      return { ready: false, messages };
+    }
+  }
 
   // 1. Claude Code CLI
   if (isClaudeInstalled()) {
@@ -179,4 +250,4 @@ async function runSetup({ verbose = true } = {}) {
   return { ready: true, messages };
 }
 
-module.exports = { runSetup, isClaudeInstalled, isOnboarded, ensureAssistantSkillInstalled };
+module.exports = { runSetup, isClaudeInstalled, isOnboarded, isElectronAvailable, ensureAssistantSkillInstalled };
