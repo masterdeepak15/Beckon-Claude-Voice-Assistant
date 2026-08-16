@@ -23,15 +23,22 @@ function createWhisperProvider({ modelName, sampleRate, onUtterance }) {
 
   function getPipeline() {
     if (!pipelinePromise) {
-      let transformers;
-      try {
-        transformers = require('@xenova/transformers');
-      } catch (e) {
-        throw new Error(
-          "The '@xenova/transformers' package isn't installed. Run: npm install @xenova/transformers"
+      // '@xenova/transformers' is ESM-only. Plain require() works on newer
+      // standalone Node (22.12+/23+ support synchronous require-of-ESM) but
+      // fails with ERR_REQUIRE_ESM on Electron's bundled Node (which lags
+      // behind system Node — e.g. Electron 31 ships Node 20.x). Dynamic
+      // import() works in a CommonJS file on every supported Node version,
+      // Electron-bundled or not, so it's the only reliable way to load this.
+      pipelinePromise = import('@xenova/transformers')
+        .catch((e) => {
+          pipelinePromise = null; // allow retry on next utterance instead of caching the failure forever
+          throw new Error(
+            `Failed to load '@xenova/transformers': ${e.message}`
+          );
+        })
+        .then((transformers) =>
+          transformers.pipeline('automatic-speech-recognition', modelName || 'Xenova/whisper-tiny.en')
         );
-      }
-      pipelinePromise = transformers.pipeline('automatic-speech-recognition', modelName || 'Xenova/whisper-tiny.en');
     }
     return pipelinePromise;
   }

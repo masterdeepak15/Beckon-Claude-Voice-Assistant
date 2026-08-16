@@ -64,7 +64,139 @@ function attemptElectronRepair() {
   }
   const result = run(`node "${installScript}"`, { stdio: 'inherit' });
   if (!result.ok) return { ok: false, reason: (result.output || '').trim().slice(0, 300) || 'download failed' };
-  return { ok: isElectronAvailable() };
+  if (isElectronAvailable()) return { ok: true };
+
+  // The install script exited cleanly (code 0), but the binary still isn't
+  // where electron's own index.js expects it. Most common cause: a stale or
+  // partially-extracted cached download — @electron/get sees a "cache hit"
+  // and skips re-downloading even though the cached archive didn't fully
+  // extract last time (antivirus intercepting the extracted .exe mid-write
+  // is a frequent culprit on Windows). Clear that specific version's cache
+  // entry and retry the install once before giving up.
+  const cacheCleared = clearStaleElectronCache();
+  if (cacheCleared) {
+    const retryResult = run(`node "${installScript}"`, { stdio: 'inherit' });
+    if (retryResult.ok && isElectronAvailable()) return { ok: true };
+  }
+
+  // Still broken — try extracting the cached zip manually. This bypasses
+  // extract-zip (the library electron's own installer uses internally),
+  // which is the actual thing observed failing silently in practice: the
+  // zip itself downloads fine and is valid, but extract-zip leaves dist/
+  // nearly empty with no error surfaced. A direct extraction (via .NET's
+  // ZipFile on Windows, or the system `unzip` on macOS/Linux) reliably
+  // recovers from that.
+  const manualResult = manualExtractElectron();
+  if (manualResult.ok) return { ok: true };
+
+  const electronCacheDir = process.platform === 'win32'
+    ? path.join(process.env.LOCALAPPDATA || '', 'electron', 'Cache')
+    : path.join(require('os').homedir(), '.cache', 'electron');
+  return {
+    ok: false,
+    reason: `electron's installer exited successfully but no working binary was found afterward, ` +
+      `even after clearing/retrying the cached download and attempting manual extraction ` +
+      `(${manualResult.reason}). Try manually deleting "${electronCacheDir}" entirely, then ` +
+      `re-run 'beckon setup'.`
+  };
+}
+
+/**
+ * Extracts the cached electron zip directly, bypassing extract-zip (the
+ * library used internally by electron's own installer, which is the
+ * component actually observed failing — the zip itself is valid and fully
+ * downloaded, but extract-zip can leave dist/ nearly empty with no error,
+ * most likely due to antivirus intercepting electron.exe mid-write on
+ * Windows). Also writes path.txt, which electron/index.js requires to
+ * exist alongside dist/ — see that file's getElectronPath().
+ */
+function manualExtractElectron() {
+  try {
+    const electronDir = path.dirname(require.resolve('electron/package.json'));
+    const version = require('electron/package.json').version;
+    const platform = process.platform; // 'win32' | 'darwin' | 'linux'
+    const arch = process.arch; // 'x64' | 'arm64' | 'ia32'
+    const cacheDir = platform === 'win32'
+      ? path.join(process.env.LOCALAPPDATA || '', 'electron', 'Cache')
+      : path.join(require('os').homedir(), '.cache', 'electron');
+
+    if (!fs.existsSync(cacheDir)) {
+      return { ok: false, reason: 'no cached download found to extract from' };
+    }
+
+    // Cache entries are either the zip directly, or a hashed folder
+    // containing it — search both shapes for this exact version+platform+arch.
+    const zipNameFragment = `electron-v${version}-${platform}-${arch}.zip`;
+    let zipPath = null;
+    for (const entry of fs.readdirSync(cacheDir)) {
+      const entryPath = path.join(cacheDir, entry);
+      if (entry === zipNameFragment) { zipPath = entryPath; break; }
+      if (fs.statSync(entryPath).isDirectory()) {
+        const nested = path.join(entryPath, zipNameFragment);
+        if (fs.existsSync(nested)) { zipPath = nested; break; }
+      }
+    }
+    if (!zipPath) {
+      return { ok: false, reason: `no cached zip found matching ${zipNameFragment}` };
+    }
+
+    const distDir = path.join(electronDir, 'dist');
+    fs.rmSync(distDir, { recursive: true, force: true });
+    fs.mkdirSync(distDir, { recursive: true });
+
+    if (platform === 'win32') {
+      const psScript =
+        `Add-Type -AssemblyName System.IO.Compression.FileSystem; ` +
+        `[System.IO.Compression.ZipFile]::ExtractToDirectory('${zipPath.replace(/'/g, "''")}', '${distDir.replace(/'/g, "''")}')`;
+      const result = run(`powershell.exe -NoProfile -Command "${psScript}"`);
+      if (!result.ok) return { ok: false, reason: `manual extraction failed: ${result.output.trim().slice(0, 200)}` };
+    } else {
+      const result = run(`unzip -o "${zipPath}" -d "${distDir}"`);
+      if (!result.ok) return { ok: false, reason: `manual extraction failed: ${result.output.trim().slice(0, 200)}` };
+    }
+
+    const exeName = platform === 'win32' ? 'electron.exe' : platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron';
+    fs.writeFileSync(path.join(electronDir, 'path.txt'), exeName);
+
+    delete require.cache[require.resolve('electron')]; // force re-resolution now that dist/ + path.txt exist
+    return isElectronAvailable()
+      ? { ok: true }
+      : { ok: false, reason: 'extraction completed but the binary still isn\'t at the expected path' };
+  } catch (e) {
+    return { ok: false, reason: e.message };
+  }
+}
+
+/**
+ * Deletes the cached zip/extraction-marker for the exact electron version
+ * this project needs, so the next install attempt re-downloads and
+ * re-extracts from scratch instead of trusting a possibly-corrupt cache.
+ * Best-effort — returns true only if it actually found and removed something.
+ */
+function clearStaleElectronCache() {
+  try {
+    const version = require('electron/package.json').version;
+    const cacheDir = process.platform === 'win32'
+      ? path.join(process.env.LOCALAPPDATA || '', 'electron', 'Cache')
+      : path.join(require('os').homedir(), '.cache', 'electron');
+    if (!fs.existsSync(cacheDir)) return false;
+    let removedSomething = false;
+    for (const entry of fs.readdirSync(cacheDir)) {
+      // Cache entries are named either `electron-v<version>-...zip` directly,
+      // or a hashed folder containing that zip — match either shape.
+      const entryPath = path.join(cacheDir, entry);
+      const isRelevant = entry.includes(`electron-v${version}-`) ||
+        (fs.statSync(entryPath).isDirectory() &&
+          fs.readdirSync(entryPath).some((f) => f.includes(`electron-v${version}-`)));
+      if (isRelevant) {
+        fs.rmSync(entryPath, { recursive: true, force: true });
+        removedSomething = true;
+      }
+    }
+    return removedSomething;
+  } catch (e) {
+    return false; // best-effort only — never let cache cleanup itself break setup
+  }
 }
 
 /**
