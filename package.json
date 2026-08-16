@@ -1,6 +1,6 @@
 {
   "name": "@masterdeepak15/beckon",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Beckon — hands-free voice front-end for Claude Code. Say your assistant's name (chosen by you at onboarding), watch it wake up in the system tray, get work done. Install and go — Claude Code and the assistant skill set themselves up automatically; the speech engine picks the most reliable option for your platform.",
   "main": "main.js",
   "files": [
@@ -26,7 +26,10 @@
   "engines": {
     "node": ">=18"
   },
-  "os": ["win32", "linux"],
+  "os": [
+    "win32",
+    "linux"
+  ],
   "dependencies": {
     "chalk": "^4.1.2",
     "pngjs": "^7.0.0",
@@ -42,5 +45,13 @@
   },
   "author": "Deepak Chougale",
   "license": "MIT",
-  "keywords": ["claude-code", "system-tray", "voice-assistant", "whisper", "hands-free", "electron", "wake-word"]
+  "keywords": [
+    "claude-code",
+    "system-tray",
+    "voice-assistant",
+    "whisper",
+    "hands-free",
+    "electron",
+    "wake-word"
+  ]
 }
