@@ -1,6 +1,6 @@
 {
   "name": "@masterdeepak15/beckon",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Beckon — hands-free voice front-end for Claude Code. Say your assistant's name (chosen by you at onboarding), watch it wake up in the system tray, get work done. Install and go — Claude Code and the assistant skill set themselves up automatically; the speech engine picks the most reliable option for your platform.",
   "main": "main.js",
   "files": [
