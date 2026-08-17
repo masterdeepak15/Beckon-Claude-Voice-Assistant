@@ -1,11 +1,28 @@
 'use strict';
 const { spawn } = require('child_process');
 
+// Tracks whatever's currently speaking so a new speak() call or an explicit
+// stop() can interrupt it — needed for barge-in (user starts talking again
+// while the assistant is still replying out loud).
+let currentProc = null;
+
+/** Kills whatever's currently speaking, if anything. Safe to call anytime. */
+function stop() {
+  if (currentProc && !currentProc.killed) {
+    try { currentProc.kill(); } catch (e) { /* already exited — fine */ }
+  }
+  currentProc = null;
+}
+
 /**
  * OS-native TTS, no cloud calls. `voiceName` is best-effort — if it doesn't
  * match an installed voice, falls back to the system default silently.
+ * Automatically interrupts any speech already in progress, since new speech
+ * (a fresh reply, or the user barging in) should always take over rather
+ * than queue behind stale audio.
  */
 function speak(text, voiceName) {
+  stop(); // never let two replies talk over each other
   const clean = text.replace(/"/g, "'").slice(0, 500);
 
   if (process.platform === 'win32') {
@@ -15,17 +32,22 @@ function speak(text, voiceName) {
     const psCmd = `Add-Type -AssemblyName System.Speech; ` +
       `$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; ${voiceSelect}` +
       `$s.Speak("${clean}")`;
-    spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], { windowsHide: true });
+    currentProc = spawn('powershell.exe', ['-NoProfile', '-Command', psCmd], { windowsHide: true });
+    currentProc.on('exit', () => { currentProc = null; });
     return;
   }
 
   if (process.platform === 'linux') {
     const args = voiceName ? ['-o', voiceName, clean] : [clean];
     const spd = spawn('spd-say', args);
+    currentProc = spd;
     spd.on('error', () => {
       const espeakArgs = voiceName ? ['-v', voiceName, clean] : [clean];
-      spawn('espeak', espeakArgs).on('error', () => {
+      const es = spawn('espeak', espeakArgs);
+      currentProc = es;
+      es.on('error', () => {
         console.error('[tts] No TTS engine found (tried spd-say, espeak).');
+        currentProc = null;
       });
     });
   }
@@ -60,4 +82,4 @@ function listVoices() {
   });
 }
 
-module.exports = { speak, listVoices };
+module.exports = { speak, stop, listVoices };
